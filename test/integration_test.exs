@@ -148,21 +148,7 @@ defmodule Pocket.IntegrationTest do
   @tag :tmp_dir
   test "unsupported native assets and missing entry points preserve the previous executable",
        %{example: example, tmp_dir: dir} do
-    root = Path.expand("..", __DIR__)
-
-    File.write!(Path.join(dir, "mix.exs"), """
-    defmodule Failure.MixProject do
-      use Mix.Project
-      def project do
-        [app: :failure, version: "0.1.0",
-         pocket: [main_module: Failure.CLI],
-         deps: [{:pocket, path: #{inspect(root)}, runtime: false}]]
-      end
-      def application, do: [extra_applications: [:logger]]
-    end
-    """)
-
-    File.mkdir_p!(Path.join(dir, "lib"))
+    fixture!(dir, example, Failure.CLI)
     source = Path.join(dir, "lib/cli.ex")
     File.write!(source, "defmodule Failure.CLI do\n  def main(_), do: :ok\nend\n")
     File.mkdir_p!(Path.join(dir, "priv"))
@@ -170,27 +156,85 @@ defmodule Pocket.IntegrationTest do
     File.mkdir_p!(Path.join(dir, "dist"))
     output = Path.join(dir, "dist/failure")
     File.write!(output, "previous executable")
-    File.cp!(Path.join(example, "pocket.lock"), Path.join(dir, "pocket.lock"))
-    # Reuse only the verified toolchain cache, not any compiled project state.
-    File.mkdir_p!(Path.join(dir, ".pocket"))
-    File.ln_s!(Path.join(example, ".pocket/toolchains"), Path.join(dir, ".pocket/toolchains"))
-
-    build = fn ->
-      System.cmd("mix", ["pocket.build", "--offline"],
-        cd: dir,
-        env: [{"MIX_ENV", "dev"}, {"MIX_BUILD_PATH", nil}],
-        stderr_to_stdout: true
-      )
-    end
-
-    {log, 1} = build.()
+    {log, 1} = build_fixture(dir)
     assert log =~ "priv/ assets or native libraries"
     assert File.read!(output) == "previous executable"
     File.rm!(Path.join(dir, "priv/custom.so"))
     File.write!(source, "defmodule Failure.CLI do\nend\n")
-    {log, 1} = build.()
+    {log, 1} = build_fixture(dir)
     assert log =~ "must export main/1"
     assert File.read!(output) == "previous executable"
     assert Path.wildcard(Path.join(dir, "_build/pocket/**/assemble-*")) == []
+  end
+
+  @tag :tmp_dir
+  test "MFA entry points receive CLI argv before their configured arguments",
+       %{example: example, tmp_dir: dir} do
+    fixture!(dir, example, {Failure.CLI, :run, ["prefix", [separator: "|"]]})
+
+    File.write!(Path.join(dir, "lib/cli.ex"), """
+    defmodule Failure.CLI do
+      def run(argv, prefix, options) do
+        ^argv = System.argv()
+        IO.puts(prefix <> ": " <> Enum.join(argv, options[:separator]))
+        :ok
+      end
+
+      def start(argv) do
+        ^argv = System.argv()
+        IO.puts(Enum.join(argv, "|"))
+        {:error, 7}
+      end
+    end
+    """)
+
+    {log, status} = build_fixture(dir)
+    assert status == 0, log
+    executable = Path.join(dir, "dist/failure")
+    assert System.cmd(executable, ["one", "two"]) == {"prefix: one|two\n", 0}
+    assert System.cmd(executable, []) == {"prefix: \n", 0}
+
+    write_project!(dir, {Failure.CLI, :start, []})
+    {log, status} = build_fixture(dir)
+    assert status == 0, log
+    assert System.cmd(executable, ["three"]) == {"three\n", 7}
+
+    write_project!(dir, {Failure.CLI, :run, ["missing second argument"]})
+    {log, 1} = build_fixture(dir)
+    assert log =~ "must export run/2"
+    assert System.cmd(executable, ["still works"]) == {"still works\n", 7}
+  end
+
+  defp fixture!(dir, example, main) do
+    write_project!(dir, main)
+    File.mkdir_p!(Path.join(dir, "lib"))
+    File.cp!(Path.join(example, "pocket.lock"), Path.join(dir, "pocket.lock"))
+    # Reuse only the verified toolchain cache, not any compiled project state.
+    File.mkdir_p!(Path.join(dir, ".pocket"))
+    File.ln_s!(Path.join(example, ".pocket/toolchains"), Path.join(dir, ".pocket/toolchains"))
+  end
+
+  defp write_project!(dir, main) do
+    root = Path.expand("..", __DIR__)
+
+    File.write!(Path.join(dir, "mix.exs"), """
+    defmodule Failure.MixProject do
+      use Mix.Project
+      def project do
+        [app: :failure, version: "0.1.0",
+         pocket: [main: #{inspect(main)}],
+         deps: [{:pocket, path: #{inspect(root)}, runtime: false}]]
+      end
+      def application, do: [extra_applications: [:logger]]
+    end
+    """)
+  end
+
+  defp build_fixture(dir) do
+    System.cmd("mix", ["pocket.build", "--offline"],
+      cd: dir,
+      env: [{"MIX_ENV", "dev"}, {"MIX_BUILD_PATH", nil}],
+      stderr_to_stdout: true
+    )
   end
 end

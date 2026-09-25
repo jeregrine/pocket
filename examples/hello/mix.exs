@@ -6,7 +6,7 @@ defmodule Hello.MixProject do
       app: :hello,
       version: "0.1.0",
       elixir: "~> 1.20",
-      pocket: [main_module: Hello.CLI, shutdown_timeout: 250],
+      pocket: [main: Hello.CLI, shutdown_timeout: 250],
       deps: [{:pocket, path: "../..", runtime: false}]
     ]
   end

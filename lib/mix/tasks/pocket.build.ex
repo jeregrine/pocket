@@ -7,8 +7,12 @@ defmodule Mix.Tasks.Pocket.Build do
 
       mix pocket.build [--install] [--offline] [--output dist/name]
 
-  Configure `pocket: [main_module: MyApp.CLI]` in `mix.exs`.
-  `main/1` receives strings and returns `:ok` or `{:error, 1..255}`.
+  Configure `pocket: [main: MyApp.CLI]` or
+  `pocket: [main: {MyApp.CLI, :run, []}]` in `mix.exs`.
+  A module is called as `main(argv)`. For `{module, function, args}`, Pocket calls
+  `apply(module, function, [argv | args])`. CLI arguments are also available
+  through `System.argv/0`.
+  Both entry-point forms return `:ok` or `{:error, 1..255}`.
 
   Production compilation happens under the pinned toolchain, in a separate
   `_build/pocket` directory. Dependencies must already be fetched. This task

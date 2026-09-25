@@ -1,7 +1,7 @@
 defmodule Pocket.ConfigTest do
   use ExUnit.Case, async: true
 
-  defp project(pocket \\ [main_module: Example.CLI]) do
+  defp project(pocket \\ [main: Example.CLI]) do
     [app: :example, version: "0.1.0", pocket: pocket]
   end
 
@@ -11,25 +11,46 @@ defmodule Pocket.ConfigTest do
 
     assert %{name: "example-cli", shutdown_timeout: 250} =
              Pocket.Config.read!(
-               project(main_module: Example.CLI, name: "example-cli", shutdown_timeout: 250)
+               project(main: Example.CLI, name: "example-cli", shutdown_timeout: 250)
              )
   end
 
   test "rejects missing entry points, unknown options, and unsafe filenames" do
-    assert_raise Mix.Error, ~r/main_module/, fn -> Pocket.Config.read!(project([])) end
+    assert_raise Mix.Error, ~r/main:/, fn -> Pocket.Config.read!(project([])) end
 
     assert_raise Mix.Error, ~r/Unknown/, fn ->
-      Pocket.Config.read!(project(main_module: Example.CLI, tree_shake: true))
+      Pocket.Config.read!(project(main: Example.CLI, tree_shake: true))
     end
 
     assert_raise Mix.Error, ~r/filename/, fn ->
-      Pocket.Config.read!(project(main_module: Example.CLI, name: "../escape"))
+      Pocket.Config.read!(project(main: Example.CLI, name: "../escape"))
     end
 
     for timeout <- [0, -1, :infinity, 60_001, "100"] do
       assert_raise Mix.Error, ~r/shutdown_timeout/, fn ->
-        Pocket.Config.read!(project(main_module: Example.CLI, shutdown_timeout: timeout))
+        Pocket.Config.read!(project(main: Example.CLI, shutdown_timeout: timeout))
       end
+    end
+  end
+
+  test "accepts MFAs with zero or multiple additional arguments" do
+    for main <- [{Example.CLI, :run, []}, {Example.CLI, :run, ["prefix", %{option: true}]}] do
+      assert %{main: ^main} = Pocket.Config.read!(project(main: main))
+    end
+  end
+
+  test "rejects malformed MFAs before building" do
+    for main <- [
+          {nil, :run, []},
+          {Example.CLI, "run", []},
+          {Example.CLI, :run, :not_a_list},
+          {Example.CLI, :run, [1 | 2]},
+          {Example.CLI, :run, List.duplicate(:arg, 255)},
+          {Example.CLI, :run, List.duplicate(:arg, 256)},
+          {Example.CLI, :run},
+          {Example.CLI, :run, [], :extra}
+        ] do
+      assert_raise Mix.Error, ~r/main:/, fn -> Pocket.Config.read!(project(main: main)) end
     end
   end
 

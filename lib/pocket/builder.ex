@@ -5,8 +5,14 @@ defmodule Pocket.Builder do
   @native_extensions ~w(.so .dylib .dll .a .o)
 
   def build!(config, output, toolchain, manifest) do
-    unless Code.ensure_loaded?(config.main) and function_exported?(config.main, :main, 1) do
-      Mix.raise("#{inspect(config.main)} must export main/1")
+    {module, function, arity} =
+      case config.main do
+        module when is_atom(module) -> {module, :main, 1}
+        {module, function, args} -> {module, function, length(args) + 1}
+      end
+
+    unless Code.ensure_loaded?(module) and function_exported?(module, function, arity) do
+      Mix.raise("#{inspect(module)} must export #{function}/#{arity}")
     end
 
     applications = resolve!([config.app, :elixir, :logger])
@@ -191,7 +197,7 @@ defmodule Pocket.Builder do
     # custom config_path), rather than evaluating configuration a second time.
     env = Mix.Tasks.Loadconfig.read_compile()
     env = Enum.filter(env, fn {app, _} -> Map.has_key?(applications, app) end)
-    env = Keyword.put(env, :pocket_runtime, main_module: config.main)
+    env = Keyword.put(env, :pocket_runtime, main: config.main)
     write_term!(Path.join(releases, "sys.config"), env)
     disk_entries(rel)
   end

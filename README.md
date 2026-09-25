@@ -40,7 +40,7 @@ def project do
   [
     app: :my_tool,
     version: "0.1.0",
-    pocket: [main_module: MyTool.CLI],
+    pocket: [main: MyTool.CLI],
     deps: [{:pocket, path: "../pocket", runtime: false}]
   ]
 end
@@ -71,11 +71,31 @@ then commit `mix.lock` and the generated **JSON** `pocket.lock`.
 
 ```elixir
 pocket: [
-  main_module: MyTool.CLI, # required: exports main/1
+  main: MyTool.CLI,       # required: module or {module, function, args}
   name: "my-tool",        # optional: defaults to the application name
   shutdown_timeout: 5_000 # optional: milliseconds, from 1 to 60_000
 ]
 ```
+
+The module form calls `MyTool.CLI.main(argv)`. Alternatively, choose a function
+and optional additional arguments:
+
+```elixir
+pocket: [main: {MyTool.CLI, :run, []}]
+```
+
+This calls `MyTool.CLI.run(argv)`. **Pocket always passes CLI arguments first**,
+followed by the configured additional arguments. For example, to call
+`MyTool.CLI.run(argv, "prefix", verbose: true)`:
+
+```elixir
+pocket: [main: {MyTool.CLI, :run, ["prefix", [verbose: true]]}]
+```
+
+The invocation is `apply(module, function, [argv | args])`, not a bare `apply/3`
+of the configured tuple. CLI arguments are also available through `System.argv/0`.
+Both forms use the same exit-status and cleanup contract.
+The option is now named `main`, replacing the prototype's `main_module`.
 
 ```sh
 mix pocket.build --output dist/my-tool
@@ -87,8 +107,9 @@ for macros, dependency build scripts, or application code.
 
 ### CLI behavior
 
-- Arguments are strings passed to `main/1`; ordinary CLI arguments are not VM flags.
-- The project's runtime applications start before `main/1`.
+- CLI arguments are strings, passed as the first argument to either entry-point
+  form and available through `System.argv/0`. Ordinary arguments are not VM flags.
+- The project's runtime applications start before the entry point.
 - Returning `:ok` exits successfully; `{:error, 1..255}` selects a nonzero exit.
 - An uncaught exception produces a diagnostic on stderr and exits with status 1.
 - Standard input works in pipes. Standard output/error use Unicode encoding.
@@ -111,7 +132,7 @@ for macros, dependency build scripts, or application code.
    configuration, and a small CLI entry-point module.
 7. Record AOT code and build the native executable with the embedded release.
 
-The recording pass does not start the application or invoke `main/1`. Compilation
+The recording pass does not start the application or invoke the entry point. Compilation
 still executes macros and build scripts, as ordinary Elixir compilation does.
 
 Mix, Hex, IEx, and the Pocket builder are excluded from application executables.

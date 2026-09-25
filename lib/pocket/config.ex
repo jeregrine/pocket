@@ -5,13 +5,16 @@ defmodule Pocket.Config do
     if project[:apps_path], do: Mix.raise("Pocket v0.1 requires a non-umbrella CLI project")
     pocket = Keyword.get(project, :pocket, [])
     unless Keyword.keyword?(pocket), do: Mix.raise(":pocket must be a keyword list")
-    unknown = Keyword.keys(pocket) -- [:main_module, :name, :shutdown_timeout]
+    unknown = Keyword.keys(pocket) -- [:main, :name, :shutdown_timeout]
     if unknown != [], do: Mix.raise("Unknown :pocket options: #{inspect(unknown)}")
 
-    main = pocket[:main_module]
+    main = pocket[:main]
 
-    unless is_atom(main) and main not in [nil, true, false] do
-      Mix.raise("Set pocket: [main_module: MyApp.CLI] in mix.exs")
+    unless valid_main?(main) do
+      Mix.raise(
+        "Set pocket: [main: MyApp.CLI] or pocket: [main: {MyApp.CLI, :run, args}] " <>
+          "in mix.exs; args must be a proper list with at most 254 additional arguments"
+      )
     end
 
     name = pocket[:name] || to_string(project[:app])
@@ -50,4 +53,13 @@ defmodule Pocket.Config do
       shutdown_timeout: timeout
     }
   end
+
+  defp valid_main?(module) when is_atom(module) and module not in [nil, true, false], do: true
+
+  defp valid_main?({module, function, args})
+       when is_atom(module) and module not in [nil, true, false] and is_atom(function) and
+              function not in [nil, true, false] and length(args) <= 254,
+       do: true
+
+  defp valid_main?(_), do: false
 end
