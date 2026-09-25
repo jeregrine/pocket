@@ -168,6 +168,9 @@ defmodule Pocket.IntegrationTest do
   end
 
   @tag :tmp_dir
+  # This case performs three native builds, not just three CLI invocations.
+  # Intel macOS CI can take several minutes to complete the AOT passes.
+  @tag timeout: 600_000
   test "MFA entry points receive CLI argv before their configured arguments",
        %{example: example, tmp_dir: dir} do
     fixture!(dir, example, {Failure.CLI, :run, ["prefix", [separator: "|"]]})
@@ -205,6 +208,49 @@ defmodule Pocket.IntegrationTest do
     assert System.cmd(executable, ["still works"]) == {"still works\n", 7}
   end
 
+  @tag :tmp_dir
+  @tag timeout: 300_000
+  test "the Hex package builds a CLI without depending on repository-only files",
+       %{example: example, tmp_dir: dir} do
+    root = Path.expand("..", __DIR__)
+    package = Path.join(dir, "package")
+
+    {log, status} =
+      System.cmd("mix", ["hex.build", "--unpack", "--output", package],
+        cd: root,
+        env: [{"MIX_ENV", "test"}, {"MIX_BUILD_PATH", nil}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, log
+
+    for name <- ["lib", "priv", "mix.exs", "README.md", "CHANGELOG.md", "LICENSE"] do
+      assert File.exists?(Path.join(package, name))
+    end
+
+    for name <- [".git", ".pocket", "_build", "deps", "examples", "test"] do
+      refute File.exists?(Path.join(package, name))
+    end
+
+    fixture!(dir, example, {Failure.CLI, :run, ["packaged"]})
+    write_project!(dir, {Failure.CLI, :run, ["packaged"]}, package)
+
+    File.write!(Path.join(dir, "lib/cli.ex"), """
+    defmodule Failure.CLI do
+      def run(argv, prefix) do
+        IO.puts(prefix <> ": " <> Enum.join(argv, " "))
+        :ok
+      end
+    end
+    """)
+
+    {log, status} = build_fixture(dir)
+    assert status == 0, log
+
+    assert System.cmd(Path.join(dir, "dist/failure"), ["hello", "λ"]) ==
+             {"packaged: hello λ\n", 0}
+  end
+
   defp fixture!(dir, example, main) do
     write_project!(dir, main)
     File.mkdir_p!(Path.join(dir, "lib"))
@@ -214,16 +260,14 @@ defmodule Pocket.IntegrationTest do
     File.ln_s!(Path.join(example, ".pocket/toolchains"), Path.join(dir, ".pocket/toolchains"))
   end
 
-  defp write_project!(dir, main) do
-    root = Path.expand("..", __DIR__)
-
+  defp write_project!(dir, main, pocket_path \\ Path.expand("..", __DIR__)) do
     File.write!(Path.join(dir, "mix.exs"), """
     defmodule Failure.MixProject do
       use Mix.Project
       def project do
         [app: :failure, version: "0.1.0",
          pocket: [main: #{inspect(main)}],
-         deps: [{:pocket, path: #{inspect(root)}, runtime: false}]]
+         deps: [{:pocket, path: #{inspect(pocket_path)}, runtime: false}]]
       end
       def application, do: [extra_applications: [:logger]]
     end

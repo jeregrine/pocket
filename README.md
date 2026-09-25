@@ -14,7 +14,11 @@ You need Elixir 1.20+ to run the Mix frontend and `curl` for the initial toolcha
 download. The application itself is compiled under the pinned toolchain, not
 your host OTP.
 
+To run the example from a source checkout:
+
 ```sh
+git clone https://github.com/jeregrine/pocket.git
+cd pocket
 cd examples/hello
 mix pocket.build --install
 
@@ -33,7 +37,7 @@ not a runtime dependency or a complete standards-compliant SBOM.
 
 ## Add it to a project
 
-Pocket has not been published to Hex yet. For now, use a local path dependency:
+Install the experimental prerelease from Hex:
 
 ```elixir
 def project do
@@ -41,13 +45,13 @@ def project do
     app: :my_tool,
     version: "0.1.0",
     pocket: [main: MyTool.CLI],
-    deps: [{:pocket, path: "../pocket", runtime: false}]
+    deps: [{:pocket, "~> 0.1.0-alpha.1", runtime: false}]
   ]
 end
 ```
 
-The same interface is intended for a future Hex package. `runtime: false` matters:
-the builder must not become a dependency of the executable.
+`runtime: false` matters: the builder must not become a dependency of the executable.
+For local development on Pocket itself, use `{:pocket, path: "../pocket", runtime: false}` instead.
 
 ```elixir
 defmodule MyTool.CLI do
@@ -206,3 +210,8 @@ Integration tests copy just the executable to a fresh directory and check
 production configuration, startup/shutdown callbacks, stdin/stdout/stderr,
 exit codes, Ctrl-C, Unicode arguments, bounded cleanup, background processes,
 and absence of runtime extraction or bundled Mix/Hex.
+
+## License
+
+Apache-2.0. See [LICENSE](https://github.com/jeregrine/pocket/blob/main/LICENSE).
+The separately downloaded OTP/Elixir toolchain has its own upstream license notices.

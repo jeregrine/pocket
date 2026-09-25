@@ -208,6 +208,7 @@ defmodule Pocket.Builder do
         "erlaotc #{:erlang.system_info(:version)}",
         "-S",
         "1:1",
+        "-fnu",
         "-Bd",
         "--",
         "-root",
