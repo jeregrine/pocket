@@ -77,6 +77,7 @@ then commit `mix.lock` and the generated **JSON** `pocket.lock`.
 pocket: [
   main: MyTool.CLI,       # required: module or {module, function, args}
   name: "my-tool",        # optional: defaults to the application name
+  console: false,        # optional: include local IEx and diagnostics
   shutdown_timeout: 5_000 # optional: milliseconds, from 1 to 60_000
 ]
 ```
@@ -109,6 +110,68 @@ mix pocket.build --offline
 `--offline` prohibits Pocket's toolchain downloads. It is **not a network sandbox**
 for macros, dependency build scripts, or application code.
 
+### Optional local console
+
+For a long-running CLI, enable Pocket's built-in console:
+
+```elixir
+pocket: [main: MyTool.CLI, console: true]
+```
+
+No application-specific socket code or command dispatch is needed:
+
+```sh
+# Terminal 1: your normal long-running command
+./dist/my_tool serve
+
+# Terminal 2: attach to that application, not a second copy
+./dist/my_tool --console
+./dist/my_tool --status   # JSON: OS PID, applications, memory, process count
+./dist/my_tool --observe  # one snapshot of the 15 largest processes by memory
+./dist/my_tool --stop     # orderly OTP shutdown
+```
+
+The console is **real IEx in the service VM**: bindings, multiline expressions,
+application calls, process inspection, and exceptions work. Ctrl-D/EOF detaches;
+Ctrl-C terminates the client without stopping the service. `System.halt/0` or
+`:init.stop/0` inside IEx, however, acts on the service itself.
+
+The normal invocation opens a Unix-domain socket inside a new mode-0700 directory
+at `<user-cache>/pocket/<executable-name>` (for example,
+`~/Library/Caches/pocket/my_tool` on macOS). This is only an IPC endpoint, **not
+runtime extraction**. No TCP port, epmd, BEAM distribution, installed Elixir,
+or external client program is required.
+
+One instance uses the default address. To run multiple instances, set
+`POCKET_CONSOLE_DIR` to a different path for each. Clients accept the same
+environment variable or an explicit directory: `my_tool --console /path/to/instance`.
+Use a location under a trusted, user-owned parent directory. Socket paths must
+fit within 103 bytes; use a shorter override if needed.
+
+**Security and scope:**
+
+- This enables arbitrary code execution as the service's OS user. Only enable
+  it for applications where that is appropriate. Never use a privileged/setuid
+  executable or an untrusted/shared parent directory.
+- The directory must not already exist. Pocket refuses to overwrite a live or
+  stale instance, including symlinks. Normal shutdown removes it; after a hard
+  kill, verify the old process has exited before manually removing its socket
+  and directory.
+- These four leading command flags are reserved only in console-enabled builds.
+  Attach commands do not start the user's applications or invoke the entry point.
+- This first console has line-oriented input, not full terminal emulation:
+  no tab completion or terminal job control. Global Logger/stderr stay with
+  the service. Disconnecting is not a cancellation API for in-flight code.
+- `--observe` is an observer-like process snapshot, not the wx Observer GUI
+  or a continuously refreshing dashboard.
+- IEx increases executable size. Default builds still exclude IEx and all
+  console modules, reserve no management commands, and open no listener.
+- The entry point must still stay alive: returning ends the process, just as
+  in an ordinary Pocket CLI.
+
+See [`examples/live`](examples/live/README.md) for a ticking, supervised worker
+you can inspect, change, and restart through the console.
+
 ### CLI behavior
 
 - CLI arguments are strings, passed as the first argument to either entry-point
@@ -139,7 +202,8 @@ for macros, dependency build scripts, or application code.
 The recording pass does not start the application or invoke the entry point. Compilation
 still executes macros and build scripts, as ordinary Elixir compilation does.
 
-Mix, Hex, IEx, and the Pocket builder are excluded from application executables.
+Mix, Hex, and the Pocket builder are excluded from application executables.
+IEx is also excluded unless `console: true` is explicitly configured.
 The backend compiler contains build tools; the artifacts it produces here do not.
 The first version trims **applications**, not individual modules or functions.
 
@@ -209,7 +273,10 @@ mix test --include integration
 Integration tests copy just the executable to a fresh directory and check
 production configuration, startup/shutdown callbacks, stdin/stdout/stderr,
 exit codes, Ctrl-C, Unicode arguments, bounded cleanup, background processes,
-and absence of runtime extraction or bundled Mix/Hex.
+and absence of runtime extraction or bundled Mix/Hex. Console tests also build
+the live example (reusing the hello example's verified toolchain cache), attach
+from a second executable, exercise IEx state and Unicode, verify that clients
+do not start application callbacks, and check private socket lifecycle.
 
 ## License
 

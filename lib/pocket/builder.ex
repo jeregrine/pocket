@@ -1,7 +1,7 @@
 defmodule Pocket.Builder do
   @moduledoc false
 
-  @forbidden_apps [:mix, :hex, :iex, :pocket]
+  @forbidden_apps [:mix, :hex, :pocket]
   @native_extensions ~w(.so .dylib .dll .a .o)
 
   def build!(config, output, toolchain, manifest) do
@@ -15,13 +15,17 @@ defmodule Pocket.Builder do
       Mix.raise("#{inspect(module)} must export #{function}/#{arity}")
     end
 
-    applications = resolve!([config.app, :elixir, :logger])
-    forbidden = Map.keys(applications) |> Enum.filter(&(&1 in @forbidden_apps))
+    console = Map.get(config, :console, false)
+    roots = [config.app, :elixir, :logger] ++ if(console, do: [:iex], else: [])
+    applications = resolve!(roots)
+    forbidden_apps = @forbidden_apps ++ if(console, do: [], else: [:iex])
+    forbidden = Map.keys(applications) |> Enum.filter(&(&1 in forbidden_apps))
 
     unless forbidden == [] do
       Mix.raise(
         "Build-only applications would ship: #{inspect(forbidden)}. " <>
-          "Declare the Pocket dependency with runtime: false."
+          "Declare the Pocket dependency with runtime: false; " <>
+          "IEx requires explicit console: true."
       )
     end
 
@@ -151,8 +155,16 @@ defmodule Pocket.Builder do
 
     runtime = Path.join([rel, "lib", "pocket_runtime-0.1.0", "ebin"])
     File.mkdir_p!(runtime)
-    {Pocket.Runtime, beam, _} = :code.get_object_code(Pocket.Runtime)
-    File.write!(Path.join(runtime, "Elixir.Pocket.Runtime.beam"), beam)
+    console = Map.get(config, :console, false)
+
+    modules =
+      [Pocket.Runtime] ++
+        if(console, do: [Pocket.Console, Pocket.Console.Server, Pocket.Console.Session], else: [])
+
+    for module <- modules do
+      {^module, beam, _} = :code.get_object_code(module)
+      File.write!(Path.join(runtime, "#{module}.beam"), beam)
+    end
 
     write_term!(
       Path.join(runtime, "pocket_runtime.app"),
@@ -161,18 +173,23 @@ defmodule Pocket.Builder do
          description: ~c"Pocket CLI entry point",
          vsn: ~c"0.1.0",
          registered: [],
-         modules: [Pocket.Runtime],
+         modules: modules,
+         mod: {Pocket.Runtime, []},
          applications: [:kernel, :stdlib, :elixir, :logger]
        ]}
     )
 
     included = Enum.flat_map(applications, fn {_, spec} -> spec.included end)
+    boot_apps = resolve!([:elixir, :logger])
 
     apps =
       applications
       |> Enum.sort_by(&elem(&1, 0))
       |> Enum.map(fn {app, spec} ->
-        {app, String.to_charlist(spec.version), if(app in included, do: :load, else: :permanent)}
+        # Attach commands must not start the user's applications. Console builds
+        # defer their startup until Runtime has selected client or normal mode.
+        load_only = app in included or (console and not Map.has_key?(boot_apps, app))
+        {app, String.to_charlist(spec.version), if(load_only, do: :load, else: :permanent)}
       end)
 
     releases = Path.join(rel, "releases")
@@ -197,7 +214,15 @@ defmodule Pocket.Builder do
     # custom config_path), rather than evaluating configuration a second time.
     env = Mix.Tasks.Loadconfig.read_compile()
     env = Enum.filter(env, fn {app, _} -> Map.has_key?(applications, app) end)
-    env = Keyword.put(env, :pocket_runtime, main: config.main)
+
+    env =
+      Keyword.put(env, :pocket_runtime,
+        main: config.main,
+        app: config.app,
+        name: config.name,
+        console: console
+      )
+
     write_term!(Path.join(releases, "sys.config"), env)
     disk_entries(rel)
   end

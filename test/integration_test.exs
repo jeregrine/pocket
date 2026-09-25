@@ -142,6 +142,7 @@ defmodule Pocket.IntegrationTest do
     assert "hello" in apps
     assert "pocket_runtime" in apps
     refute Enum.any?(~w(pocket mix hex iex megaco), &(&1 in apps))
+    refute Enum.any?(report["files"], &String.contains?(&1, "Elixir.Pocket.Console"))
     assert Enum.any?(report["files"], &String.ends_with?(&1, "/jitc/atoms"))
   end
 
