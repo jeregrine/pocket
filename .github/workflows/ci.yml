@@ -1,0 +1,26 @@
+name: Test Pocket
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@0f75c29430f34bb5af4cce5e3b7f6a8860fca236 # v1
+        with:
+          otp-version: "29.0.3"
+          elixir-version: "1.20.2"
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+      - name: Install pinned integration toolchain
+        working-directory: examples/hello
+        run: mix pocket.toolchain
+      - run: mix test --include integration

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "otp-aotc-4b177ea52e0223da2fbc4b584d641ebfaf0a42c8",
+  "source": "https://github.com/wojtekmach/otp-aotc/tree/4b177ea52e0223da2fbc4b584d641ebfaf0a42c8",
+  "artifacts": {
+    "darwin-arm64": {
+      "sha256": "78bb1421254e1e50ed16133e9a297ab95bed347fe0646cb1caaaecefe90f419c",
+      "url": "https://raw.githubusercontent.com/wojtekmach/otp-aotc/4b177ea52e0223da2fbc4b584d641ebfaf0a42c8/elixiraotc-darwin-arm64"
+    },
+    "darwin-x86_64": {
+      "sha256": "111ec326e0e07e0c0f43164dd87e586171a6f936d00372a4e5c33c94bb156ce1",
+      "url": "https://raw.githubusercontent.com/wojtekmach/otp-aotc/4b177ea52e0223da2fbc4b584d641ebfaf0a42c8/elixiraotc-darwin-x86_64"
+    },
+    "linux-arm64": {
+      "sha256": "d5b58c66572e1e5e38c1ab71692eaf87c0d771a4aa0b1d1396fedb6abff78c6e",
+      "url": "https://raw.githubusercontent.com/wojtekmach/otp-aotc/4b177ea52e0223da2fbc4b584d641ebfaf0a42c8/elixiraotc-linux-arm64"
+    },
+    "linux-x86_64": {
+      "sha256": "a91c82139f99a2ccb650026f6033e5eb92ce991ca171aa923f0a329cd9e8d7b6",
+      "url": "https://raw.githubusercontent.com/wojtekmach/otp-aotc/4b177ea52e0223da2fbc4b584d641ebfaf0a42c8/elixiraotc-linux-x86_64"
+    }
+  }
+}
