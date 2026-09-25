@@ -41,9 +41,9 @@ defmodule Pocket.Builder do
     File.chmod!(workspace, 0o700)
 
     try do
+      {emulator, native} = Pocket.Native.build!(applications, toolchain, workspace)
       rel = Path.join(workspace, "release")
-      entries = assemble!(config, applications, rel)
-      emulator = toolchain |> File.read!() |> Pocket.Archive.emulator!()
+      entries = assemble!(config, applications, rel, native)
       comment = boot_comment(config)
       recording = Path.join(workspace, "recording")
       File.mkdir_p!(recording)
@@ -88,6 +88,7 @@ defmodule Pocket.Builder do
         "erts" => to_string(:erlang.system_info(:version)),
         "executable_sha256" => Pocket.Toolchain.digest(output),
         "executable_bytes" => File.stat!(output).size,
+        "native" => native,
         "applications" =>
           (Enum.map(applications, fn {app, spec} ->
              %{"name" => to_string(app), "version" => spec.version}
@@ -136,11 +137,11 @@ defmodule Pocket.Builder do
     resolve(dependencies ++ rest, Map.put(acc, app, spec))
   end
 
-  defp assemble!(config, applications, rel) do
+  defp assemble!(config, applications, rel, native) do
     Enum.each(applications, fn {app, spec} ->
       target = Path.join([rel, "lib", "#{app}-#{spec.version}", "ebin"])
       copy_tree!(Path.join(spec.dir, "ebin"), target)
-      check_priv!(app, spec.dir)
+      copy_priv!(app, spec.dir, Path.join(Path.dirname(target), "priv"), native)
     end)
 
     # Replace ordinary protocol BEAMs with the project's consolidated versions.
@@ -259,29 +260,40 @@ defmodule Pocket.Builder do
     ) <> "\n"
   end
 
-  defp check_priv!(app, dir) do
+  defp copy_priv!(app, dir, destination, native) do
     # Standard runtime files came from the verified toolchain; native OTP
-    # components were linked by its builder. Third-party assets need explicit
-    # filesystem semantics, which v0.1 intentionally doesn't pretend to support.
+    # components were linked by its builder. Other resources are stored in the
+    # archive, accessible through erl_prim_loader, not ordinary filesystem APIs.
     {:ok, [[archive]]} = :init.get_argument(:primary_archive)
 
-    unless String.starts_with?(dir, to_string(archive) <> "/") do
+    unless String.starts_with?(dir, to_string(archive) <> "/") or
+             Pocket.Compiler.builtin_directory?(dir) do
       priv = Path.join(dir, "priv")
 
-      case :erl_prim_loader.list_dir(String.to_charlist(priv)) do
-        {:ok, []} ->
-          :ok
+      for path <- Path.wildcard(Path.join(priv, "**/*"), match_dot: true) do
+        relative = Path.relative_to(path, priv)
+        stat = File.lstat!(path)
 
-        {:ok, _} ->
-          Mix.raise(
-            "#{app} contains priv/ assets or native libraries. Pocket v0.1 cannot package these without extraction."
-          )
+        cond do
+          stat.type == :directory ->
+            :ok
 
-        :error ->
-          :ok
+          stat.type != :regular ->
+            Mix.raise("Unsupported priv/ file type: #{path}")
 
-        {:error, _} ->
-          :ok
+          Pocket.Native.linked_file?(app, relative, native) ->
+            :ok
+
+          Path.extname(path) in @native_extensions ->
+            Mix.raise(
+              "#{app} contains priv/ assets or native libraries without a static adapter: #{path}"
+            )
+
+          true ->
+            target = Path.join(destination, relative)
+            File.mkdir_p!(Path.dirname(target))
+            File.cp!(path, target)
+        end
       end
     end
   end

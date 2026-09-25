@@ -21,15 +21,25 @@ defmodule Mix.Tasks.Pocket.Build do
   The default output is `dist/<app>`. Only native builds are supported.
   `--install` explicitly permits a missing toolchain download. `--offline`
   prevents toolchain downloads (it does not sandbox dependency build scripts).
+
+  `--native-sdk PATH` selects a trusted local relinkable elixiraotc SDK for
+  experimental static NIF builds. GPUI 0.2.0 is detected automatically; the
+  bootstrap does not yet distribute SDKs. Native compilation requires Cargo and
+  a system C/C++ linker. Review and commit the generated `pocket.gpui.lock`.
   """
 
   @impl true
   def run(args) do
     {opts, rest, invalid} =
-      OptionParser.parse(args, strict: [install: :boolean, offline: :boolean, output: :string])
+      OptionParser.parse(args,
+        strict: [install: :boolean, offline: :boolean, output: :string, native_sdk: :string]
+      )
 
     if rest != [] or invalid != [],
-      do: Mix.raise("Usage: mix pocket.build [--install] [--offline] [--output PATH]")
+      do:
+        Mix.raise(
+          "Usage: mix pocket.build [--install] [--offline] [--output PATH] [--native-sdk PATH]"
+        )
 
     config = Pocket.Config.read!()
     {toolchain, manifest} = Pocket.Toolchain.ensure!(opts)
@@ -44,7 +54,9 @@ defmodule Mix.Tasks.Pocket.Build do
           {"MIX_TARGET", "host"},
           {"MIX_BUILD_PATH", build_path},
           {"POCKET_TOOLCHAIN", toolchain},
-          {"POCKET_OUTPUT", output}
+          {"POCKET_OUTPUT", output},
+          {"POCKET_COMPILER_SOURCE", Path.expand("../../pocket/compiler.ex", __DIR__)},
+          {"POCKET_NATIVE_SDK", opts[:native_sdk] && Path.expand(opts[:native_sdk])}
         ]
 
     Mix.shell().info(

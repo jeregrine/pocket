@@ -252,6 +252,36 @@ defmodule Pocket.IntegrationTest do
              {"packaged: hello λ\n", 0}
   end
 
+  @tag :tmp_dir
+  test "priv resources remain readable through the archive loader after relocation",
+       %{example: example, tmp_dir: dir} do
+    fixture!(dir, example, Failure.CLI)
+    File.mkdir_p!(Path.join(dir, "priv/nested"))
+    File.write!(Path.join(dir, "priv/nested/.greeting"), "hello from the archive\n")
+
+    File.write!(Path.join(dir, "lib/cli.ex"), """
+    defmodule Failure.CLI do
+      def main(_) do
+        path = :code.priv_dir(:failure) ++ ~c"/nested/.greeting"
+        {:ok, contents, _} = :erl_prim_loader.get_file(path)
+        IO.write(contents)
+        :ok
+      end
+    end
+    """)
+
+    {log, status} = build_fixture(dir)
+    assert status == 0, log
+    runtime = Path.join(dir, "isolated")
+    File.mkdir!(runtime)
+    executable = Path.join(runtime, "resource-test")
+    File.cp!(Path.join(dir, "dist/failure"), executable)
+    File.chmod!(executable, 0o755)
+
+    assert {"hello from the archive\n", 0} = System.cmd(executable, [], cd: runtime)
+    assert File.ls!(runtime) == ["resource-test"]
+  end
+
   defp fixture!(dir, example, main) do
     write_project!(dir, main)
     File.mkdir_p!(Path.join(dir, "lib"))

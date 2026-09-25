@@ -35,6 +35,14 @@ The result is `dist/hello`, plus `dist/hello.manifest.json` for auditing. **Only
 the executable is needed to run the program.** The manifest is a build inventory,
 not a runtime dependency or a complete standards-compliant SBOM.
 
+### Native desktop example
+
+[`examples/gpui`](examples/gpui/README.md) builds a GPUI counter with its Rust NIF
+statically linked into BEAM: one executable, no shared NIF or runtime extraction.
+GPUI is detected automatically. This experimental path currently requires
+`--native-sdk PATH` pointing to a locally exported, matching `elixiraotc` SDK;
+reviewed downloadable SDKs are not yet part of the bootstrap.
+
 ## Add it to a project
 
 Install the experimental prerelease from Hex:
@@ -235,8 +243,10 @@ This is a working prototype, **not a production-hardened runtime**.
 - Native targets: macOS and Linux, ARM64 and x86-64. No cross-compilation or Windows.
 - A single executable is not a promise of universal static linking. System-library
   and OS compatibility still matter; Linux bootstrap builds come from Ubuntu 24.04.
-- Third-party `priv/` assets and native libraries are rejected, not extracted or
-  silently dropped. Packaging custom NIFs and filesystem resources is future work.
+- Non-native third-party `priv/` assets are embedded, not extracted or silently
+  dropped. Read them through `:erl_prim_loader.get_file/1`; ordinary filesystem
+  APIs cannot open archive paths. Native libraries without a supported static
+  adapter are rejected. The initial adapter supports `gpui_native` 0.2.0.
 - Only OTP applications available in the chosen toolchain can be used. The
   bootstrap is not a full OTP installation; missing runtime applications fail the build.
 - `runtime.exs`, custom release definitions, and umbrella projects are rejected.
