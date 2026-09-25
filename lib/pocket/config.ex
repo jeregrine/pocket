@@ -5,8 +5,11 @@ defmodule Pocket.Config do
     if project[:apps_path], do: Mix.raise("Pocket v0.1 requires a non-umbrella CLI project")
     pocket = Keyword.get(project, :pocket, [])
     unless Keyword.keyword?(pocket), do: Mix.raise(":pocket must be a keyword list")
-    unknown = Keyword.keys(pocket) -- [:main, :name, :shutdown_timeout]
+    unknown = Keyword.keys(pocket) -- [:main, :name, :shutdown_timeout, :console]
     if unknown != [], do: Mix.raise("Unknown :pocket options: #{inspect(unknown)}")
+
+    console = Keyword.get(pocket, :console, false)
+    unless is_boolean(console), do: Mix.raise("Pocket :console must be a boolean")
 
     main = pocket[:main]
 
@@ -50,6 +53,7 @@ defmodule Pocket.Config do
       version: project[:version],
       main: main,
       name: name,
+      console: console,
       shutdown_timeout: timeout
     }
   end

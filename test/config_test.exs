@@ -5,6 +5,17 @@ defmodule Pocket.ConfigTest do
     [app: :example, version: "0.1.0", pocket: pocket]
   end
 
+  test "console is explicitly opt-in and boolean" do
+    assert %{console: false} = Pocket.Config.read!(project())
+    assert %{console: true} = Pocket.Config.read!(project(main: Example.CLI, console: true))
+
+    for console <- [nil, :iex, "true", []] do
+      assert_raise Mix.Error, ~r/:console must be a boolean/, fn ->
+        Pocket.Config.read!(project(main: Example.CLI, console: console))
+      end
+    end
+  end
+
   test "entry point, name, and shutdown deadline have explicit defaults" do
     assert %{main: Example.CLI, name: "example", shutdown_timeout: 5_000} =
              Pocket.Config.read!(project())
