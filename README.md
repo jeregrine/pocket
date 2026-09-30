@@ -165,7 +165,7 @@ fit within 103 bytes; use a shorter override if needed.
   stale instance, including symlinks. Normal shutdown removes it; after a hard
   kill, verify the old process has exited before manually removing its socket
   and directory.
-- These four leading command flags are reserved only in console-enabled builds.
+- These four leading command flags are reserved only in `console: true` builds.
   Attach commands do not start the user's applications or invoke the entry point.
 - This first console has line-oriented input, not full terminal emulation:
   no tab completion or terminal job control. Global Logger/stderr stay with
@@ -179,6 +179,17 @@ fit within 103 bytes; use a shorter override if needed.
 
 See [`examples/live`](examples/live/README.md) for a ticking, supervised worker
 you can inspect, change, and restart through the console.
+
+For an experimental remote version, see [`examples/tailnet`](examples/tailnet/README.md):
+one executable with Tailscale's Rust NIF linked into BEAM, authenticated commands,
+and real IEx, without BEAM distribution. Building currently requires a matching
+native SDK, like the GPUI example; deployed binaries need neither SDK nor Mix.
+
+Applications supplying their own console transport can opt into
+`console: :embedded`. This ships IEx and the shared console session but opens
+no automatic Unix socket and reserves no management flags. The application
+owns authentication, transport, and session startup. This is how the tailnet
+example can run server and client processes without competing for a local socket.
 
 ### CLI behavior
 
@@ -211,7 +222,7 @@ The recording pass does not start the application or invoke the entry point. Com
 still executes macros and build scripts, as ordinary Elixir compilation does.
 
 Mix, Hex, and the Pocket builder are excluded from application executables.
-IEx is also excluded unless `console: true` is explicitly configured.
+IEx is also excluded unless `console: true` or `console: :embedded` is explicitly configured.
 The backend compiler contains build tools; the artifacts it produces here do not.
 The first version trims **applications**, not individual modules or functions.
 
@@ -221,10 +232,14 @@ The exact upstream artifact and SHA-256 for each platform are pinned in
 
 ## Toolchain ownership and updates
 
-Pocket consumes toolchain releases; it does not maintain OTP patches or build OTP
+Pocket consumes toolchain artifacts; it does not maintain OTP patches or build OTP
 in its normal CI. Source-build and release automation belong in `elixiraotc`.
-Until a reviewed release is available, the bootstrap pins existing upstream
-artifacts at an immutable Git commit.
+For now, downloads are pinned to the
+[`jeregrine/elixiraotc` fork at `88e8491`](https://github.com/jeregrine/elixiraotc/tree/88e8491714069612b87fa023fb63cb88330fe33a),
+not a moving branch. Those four bootstrap binaries are byte-identical to the
+previous upstream pin; this changes their distribution source, not ERTS or Elixir.
+Published SDK artifacts are still pending, so native builds continue to require
+an explicitly selected, matching local SDK.
 
 `pocket.lock` must match the reviewed manifest compiled into this Pocket version.
 An edited lock file cannot redirect downloads to an arbitrary server. Cached

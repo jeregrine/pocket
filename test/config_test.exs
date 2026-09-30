@@ -5,9 +5,12 @@ defmodule Pocket.ConfigTest do
     [app: :example, version: "0.1.0", pocket: pocket]
   end
 
-  test "console is explicitly opt-in and boolean" do
+  test "console is explicitly opt-in, with an embedded session-only mode" do
     assert %{console: false} = Pocket.Config.read!(project())
     assert %{console: true} = Pocket.Config.read!(project(main: Example.CLI, console: true))
+
+    assert %{console: :embedded} =
+             Pocket.Config.read!(project(main: Example.CLI, console: :embedded))
 
     for console <- [nil, :iex, "true", []] do
       assert_raise Mix.Error, ~r/:console must be a boolean/, fn ->

@@ -52,4 +52,30 @@ defmodule Pocket.NativeTest do
       Pocket.Native.build!(%{gpui_native: %{version: "9.0.0"}}, nil, nil)
     end
   end
+
+  test "only the registered Tailscale library is replaced by the static adapter" do
+    native = [%{"module" => "Elixir.Tailscale.Native"}]
+    assert Pocket.Native.linked_file?(:tailscale, "native/ts_elixir.so", native)
+    assert Pocket.Native.linked_file?(:tailscale, "native/libts_elixir.dylib", native)
+    refute Pocket.Native.linked_file?(:tailscale, "native/ts_elixir.so", [])
+    refute Pocket.Native.linked_file?(:other, "native/ts_elixir.so", native)
+    refute Pocket.Native.linked_file?(:tailscale, "native/ts_elixir_extra.so", native)
+    refute Pocket.Native.linked_file?(:tailscale, "native/other.so", native)
+  end
+
+  test "unsupported Tailscale versions fail before building native code" do
+    assert_raise Mix.Error, ~r/supports tailscale 0.6.1/, fn ->
+      Pocket.Native.build!(%{tailscale: %{version: "0.7.0"}}, nil, nil)
+    end
+  end
+
+  test "independent Rustler libraries cannot silently collide in one emulator" do
+    assert_raise Mix.Error, ~r/Combining multiple Rustler/, fn ->
+      Pocket.Native.build!(
+        %{gpui_native: %{version: "0.2.0"}, tailscale: %{version: "0.6.1"}},
+        nil,
+        nil
+      )
+    end
+  end
 end

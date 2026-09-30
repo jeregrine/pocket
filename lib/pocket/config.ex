@@ -9,7 +9,9 @@ defmodule Pocket.Config do
     if unknown != [], do: Mix.raise("Unknown :pocket options: #{inspect(unknown)}")
 
     console = Keyword.get(pocket, :console, false)
-    unless is_boolean(console), do: Mix.raise("Pocket :console must be a boolean")
+
+    unless console in [false, true, :embedded],
+      do: Mix.raise("Pocket :console must be a boolean or :embedded")
 
     main = pocket[:main]
 

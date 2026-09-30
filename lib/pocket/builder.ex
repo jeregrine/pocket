@@ -25,7 +25,7 @@ defmodule Pocket.Builder do
       Mix.raise(
         "Build-only applications would ship: #{inspect(forbidden)}. " <>
           "Declare the Pocket dependency with runtime: false; " <>
-          "IEx requires explicit console: true."
+          "IEx requires explicit console: true or console: :embedded."
       )
     end
 
@@ -158,9 +158,14 @@ defmodule Pocket.Builder do
     File.mkdir_p!(runtime)
     console = Map.get(config, :console, false)
 
-    modules =
-      [Pocket.Runtime] ++
-        if(console, do: [Pocket.Console, Pocket.Console.Server, Pocket.Console.Session], else: [])
+    console_modules =
+      case console do
+        true -> [Pocket.Console, Pocket.Console.Server, Pocket.Console.Session]
+        :embedded -> [Pocket.Console.Session]
+        false -> []
+      end
+
+    modules = [Pocket.Runtime | console_modules]
 
     for module <- modules do
       {^module, beam, _} = :code.get_object_code(module)
@@ -189,7 +194,7 @@ defmodule Pocket.Builder do
       |> Enum.map(fn {app, spec} ->
         # Attach commands must not start the user's applications. Console builds
         # defer their startup until Runtime has selected client or normal mode.
-        load_only = app in included or (console and not Map.has_key?(boot_apps, app))
+        load_only = app in included or (console == true and not Map.has_key?(boot_apps, app))
         {app, String.to_charlist(spec.version), if(load_only, do: :load, else: :permanent)}
       end)
 

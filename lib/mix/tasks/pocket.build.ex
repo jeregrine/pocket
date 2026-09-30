@@ -23,9 +23,10 @@ defmodule Mix.Tasks.Pocket.Build do
   prevents toolchain downloads (it does not sandbox dependency build scripts).
 
   `--native-sdk PATH` selects a trusted local relinkable elixiraotc SDK for
-  experimental static NIF builds. GPUI 0.2.0 is detected automatically; the
+  experimental static NIF builds. GPUI 0.2.0 and Tailscale 0.6.1 have adapters; the
   bootstrap does not yet distribute SDKs. Native compilation requires Cargo and
-  a system C/C++ linker. Review and commit the generated `pocket.gpui.lock`.
+  a system C/C++ linker. Review and commit the generated `pocket.gpui.lock` or
+  `pocket.tailscale.lock`. Combining the two Rustler adapters is not supported yet.
   """
 
   @impl true

@@ -34,7 +34,7 @@ defmodule Pocket.Runtime do
   end
 
   defp dispatch(main, argv) do
-    if Application.get_env(:pocket_runtime, :console, false) do
+    if Application.get_env(:pocket_runtime, :console, false) == true do
       case Pocket.Console.command(argv) do
         :not_console ->
           app = Application.fetch_env!(:pocket_runtime, :app)

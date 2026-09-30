@@ -16,6 +16,15 @@ defmodule PocketTest do
     end
   end
 
+  test "every example lock agrees with the reviewed toolchain manifest" do
+    locks = Path.expand("../examples/*/pocket.lock", __DIR__) |> Path.wildcard()
+    assert locks != []
+
+    for path <- locks do
+      assert JSON.decode!(File.read!(path)) == Pocket.Toolchain.manifest(), path
+    end
+  end
+
   @tag :tmp_dir
   test "lock uses JSON, round trips, and refuses modified manifests", %{tmp_dir: dir} do
     path = Path.join(dir, "pocket.lock")
